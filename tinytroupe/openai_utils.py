@@ -31,6 +31,8 @@ class OpenAIClient:
     def __init__(self, cache_api_calls=default["cache_api_calls"], cache_file_name=default["cache_file_name"]) -> None:
         logger.debug("Initializing OpenAIClient")
 
+        self.client = None
+
         # should we cache api calls and reuse them?
         self.set_api_cache(cache_api_calls, cache_file_name)
     
@@ -52,7 +54,8 @@ class OpenAIClient:
         """
         Sets up the OpenAI API configurations for this client.
         """
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        if self.client is None:
+            self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     @config_manager.config_defaults(
         model="model",
@@ -175,10 +178,9 @@ class OpenAIClient:
                 if self.cache_api_calls and (cache_key in self.api_cache):
                     response = self.api_cache[cache_key]
                 else:
-                    if waiting_time > 0:
-                        logger.info(f"Waiting {waiting_time} seconds before next API request (to avoid throttling)...")
-                        time.sleep(waiting_time)
-                    
+                    # We no longer sleep here, as the exponential backoff already handles
+                    # the waiting time between retries. Sleeping here would cause
+                    # double sleeping.
                     response = self._raw_model_call(model, chat_api_params)
                     if self.cache_api_calls:
                         self.api_cache[cache_key] = response
@@ -195,32 +197,30 @@ class OpenAIClient:
                 else:
                     return utils.sanitize_dict(self._raw_model_response_extractor(response))
 
-            except InvalidRequestError as e:
+            except (InvalidRequestError, openai.BadRequestError) as e:
                 logger.error(f"[{i}] Invalid request error, won't retry: {e}")
 
                 # there's no point in retrying if the request is invalid
                 # so we return None right away
                 return None
             
-            except openai.BadRequestError as e:
-                logger.error(f"[{i}] Invalid request error, won't retry: {e}")
-                
-                # there's no point in retrying if the request is invalid
-                # so we return None right away
-                return None
+            except (openai.RateLimitError,
+                    openai.APITimeoutError,
+                    openai.APIConnectionError,
+                    openai.InternalServerError,
+                    NonTerminalError) as e:
+                logger.warning(f"[{i}] {type(e).__name__} Error: {e}")
+                if i < max_attempts:
+                    aux_exponential_backoff()
+                else:
+                    logger.error(f"Max attempts reached for {type(e).__name__} Error: {e}")
             
-            except openai.RateLimitError:
-                logger.warning(
-                    f"[{i}] Rate limit error, waiting a bit and trying again.")
-                aux_exponential_backoff()
-            
-            except NonTerminalError as e:
-                logger.error(f"[{i}] Non-terminal error: {e}")
-                aux_exponential_backoff()
-                
             except Exception as e:
                 logger.error(f"[{i}] {type(e).__name__} Error: {e}")
-                aux_exponential_backoff()
+                if i < max_attempts:
+                    aux_exponential_backoff()
+                else:
+                    logger.error(f"Max attempts reached for {type(e).__name__} Error: {e}")
 
         logger.error(f"Failed to get response after {max_attempts} attempts.")
         return None
@@ -396,22 +396,23 @@ class AzureClient(OpenAIClient):
         Sets up the Azure OpenAI Service API configurations for this client,
         including the API endpoint and key.
         """
-        if os.getenv("AZURE_OPENAI_KEY"):
-            logger.info("Using Azure OpenAI Service API with key.")
-            self.client = AzureOpenAI(azure_endpoint= os.getenv("AZURE_OPENAI_ENDPOINT"),
-                                    api_version = config["OpenAI"]["AZURE_API_VERSION"],
-                                    api_key = os.getenv("AZURE_OPENAI_KEY"))
-        else:  # Use Entra ID Auth
-            logger.info("Using Azure OpenAI Service API with Entra ID Auth.")
-            from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+        if self.client is None:
+            if os.getenv("AZURE_OPENAI_KEY"):
+                logger.info("Using Azure OpenAI Service API with key.")
+                self.client = AzureOpenAI(azure_endpoint= os.getenv("AZURE_OPENAI_ENDPOINT"),
+                                        api_version = config["OpenAI"]["AZURE_API_VERSION"],
+                                        api_key = os.getenv("AZURE_OPENAI_KEY"))
+            else:  # Use Entra ID Auth
+                logger.info("Using Azure OpenAI Service API with Entra ID Auth.")
+                from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 
-            credential = DefaultAzureCredential()
-            token_provider = get_bearer_token_provider(credential, "https://cognitiveservices.azure.com/.default")
-            self.client = AzureOpenAI(
-                azure_endpoint= os.getenv("AZURE_OPENAI_ENDPOINT"),
-                api_version = config["OpenAI"]["AZURE_API_VERSION"],
-                azure_ad_token_provider=token_provider
-            )
+                credential = DefaultAzureCredential()
+                token_provider = get_bearer_token_provider(credential, "https://cognitiveservices.azure.com/.default")
+                self.client = AzureOpenAI(
+                    azure_endpoint= os.getenv("AZURE_OPENAI_ENDPOINT"),
+                    api_version = config["OpenAI"]["AZURE_API_VERSION"],
+                    azure_ad_token_provider=token_provider
+                )
 
 
 class HelmholtzBlabladorClient(OpenAIClient):
@@ -424,10 +425,11 @@ class HelmholtzBlabladorClient(OpenAIClient):
         """
         Sets up the Helmholtz Blablador API configurations for this client.
         """
-        self.client = OpenAI(
-            base_url="https://api.helmholtz-blablador.fz-juelich.de/v1",
-            api_key=os.getenv("BLABLADOR_API_KEY", "dummy"),
-        )
+        if self.client is None:
+            self.client = OpenAI(
+                base_url="https://api.helmholtz-blablador.fz-juelich.de/v1",
+                api_key=os.getenv("BLABLADOR_API_KEY", "dummy"),
+            )
 
 ###########################################################################
 # Exceptions
