@@ -108,6 +108,11 @@ def find_best_persona(criteria):
         # select_best_persona uses LLM to find the best index
         idx = select_best_persona(criteria=criteria, personas=personas)
 
+        try:
+            idx = int(idx)
+        except (ValueError, TypeError):
+            return {"error": f"LLM returned an invalid index: {idx}"}
+
         if idx >= 0 and idx < len(personas):
             return personas[idx]
         else:

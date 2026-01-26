@@ -169,14 +169,15 @@ class OpenAIClient:
                 # 2. alias-large for 2 attempts, 35s wait
                 # 3. alias-huge until success, 60s wait
                 #
+                # Model fallback strategy using config
                 if i <= 3:
-                    current_model = "alias-fast"
+                    current_model = config["OpenAI"].get("MODEL", "alias-fast")
                     current_wait_time = 35
                 elif i <= 5:
-                    current_model = "alias-large"
+                    current_model = config["OpenAI"].get("FALLBACK_MODEL_LARGE", "alias-large")
                     current_wait_time = 35
                 else:
-                    current_model = "alias-huge"
+                    current_model = config["OpenAI"].get("FALLBACK_MODEL_HUGE", "alias-huge")
                     current_wait_time = 60
 
                 chat_api_params["model"] = current_model
@@ -224,14 +225,6 @@ class OpenAIClient:
                     Exception) as e:
                 msg = f"[{i}] {type(e).__name__} Error with {current_model}: {e}. Waiting {current_wait_time} seconds before next attempt..."
                 logger.warning(msg)
-
-                # inform the Gradio UI/API if possible
-                try:
-                    import gradio as gr
-                    gr.Warning(msg)
-                except Exception:
-                    # not running in Gradio or other issue
-                    pass
 
                 time.sleep(current_wait_time)
                 continue

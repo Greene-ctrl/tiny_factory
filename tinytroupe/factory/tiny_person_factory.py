@@ -558,6 +558,11 @@ class TinyPersonFactory(TinyFactory):
             if len(self.remaining_characteristics_sample) != n:
                 logger.warning(f"Expected {n} samples, but got {len(self.remaining_characteristics_sample)} samples. The LLM may have failed to sum up the quantities in the sampling plan correctly.")
 
+            # If we got more samples than requested, we truncate them to avoid generating too many names or personas.
+            if len(self.remaining_characteristics_sample) > n:
+                logger.info(f"Truncating {len(self.remaining_characteristics_sample)} samples to the requested {n} samples.")
+                self.remaining_characteristics_sample = self.remaining_characteristics_sample[:n]
+
             logger.info(f"Sample plan has been flattened, contains {len(self.remaining_characteristics_sample)} total samples.")
             logger.debug(f"Remaining characteristics sample: {json.dumps(self.remaining_characteristics_sample, indent=4)}")
 
