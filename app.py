@@ -3,6 +3,41 @@ import os
 import gradio as gr
 import json
 from tinytroupe.factory import TinyPersonFactory
+from tinytroupe.utils.semantics import select_best_persona
+from huggingface_hub import hf_hub_download, upload_file
+
+HF_TOKEN = os.getenv("HF_TOKEN") # Ensure this is set in Space secrets
+REPO_ID = "harvesthealth/tiny_factory"
+PERSONA_BASE_FILE = "persona_base.json"
+
+def load_persona_base():
+    if not HF_TOKEN:
+        print("HF_TOKEN not found, persistence disabled.")
+        return []
+    try:
+        path = hf_hub_download(repo_id=REPO_ID, filename=PERSONA_BASE_FILE, repo_type="space", token=HF_TOKEN)
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading persona base: {e}")
+        return []
+
+def save_persona_base(personas):
+    if not HF_TOKEN:
+        print("HF_TOKEN not found, skipping upload.")
+        return
+    with open(PERSONA_BASE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(personas, f, indent=4)
+    try:
+        upload_file(
+            path_or_fileobj=PERSONA_BASE_FILE,
+            path_in_repo=PERSONA_BASE_FILE,
+            repo_id=REPO_ID,
+            repo_type="space",
+            token=HF_TOKEN
+        )
+    except Exception as e:
+        print(f"Error saving persona base to Hub: {e}")
 
 # --- CHANGE 1: The function now accepts an optional API key. ---
 def generate_personas(business_description, customer_profile, num_personas, blablador_api_key=None):
@@ -37,6 +72,12 @@ def generate_personas(business_description, customer_profile, num_personas, blab
         people = factory.generate_people(number_of_people=num_personas, parallelize=False)
         personas_data = [person._persona for person in people]
         
+        # --- NEW: Update the Tresor ---
+        current_base = load_persona_base()
+        current_base.extend(personas_data)
+        save_persona_base(current_base)
+        # ------------------------------
+
         return personas_data
 
     except Exception as e:
@@ -55,6 +96,26 @@ def generate_personas(business_description, customer_profile, num_personas, blab
             os.environ["BLABLADOR_API_KEY"] = original_key
 
 
+def find_best_persona(criteria):
+    """
+    Loads the persona base and finds the best matching persona based on criteria.
+    """
+    personas = load_persona_base()
+    if not personas:
+        return {"error": "Persona base is empty. Generate some personas first!"}
+
+    try:
+        # select_best_persona uses LLM to find the best index
+        idx = select_best_persona(criteria=criteria, personas=personas)
+
+        if idx >= 0 and idx < len(personas):
+            return personas[idx]
+        else:
+            return {"error": f"No matching persona found for criteria: {criteria}"}
+    except Exception as e:
+        return {"error": f"Error during persona matching: {str(e)}"}
+
+
 with gr.Blocks() as demo:
     gr.Markdown("<h1>Tiny Persona Generator</h1>")
     with gr.Row():
@@ -71,8 +132,14 @@ with gr.Blocks() as demo:
             )
 
             generate_button = gr.Button("Generate Personas")
+
+            gr.Markdown("---")
+            gr.Markdown("<h3>Search Tresor</h3>")
+            criteria_input = gr.Textbox(label="Criteria to find best matching persona", lines=2)
+            find_button = gr.Button("Find Best Persona in Tresor")
+
         with gr.Column():
-            output_json = gr.JSON(label="Generated Personas")
+            output_json = gr.JSON(label="Output (Generated or Matched Persona)")
 
     generate_button.click(
         fn=generate_personas,
@@ -80,6 +147,13 @@ with gr.Blocks() as demo:
         inputs=[business_description_input, customer_profile_input, num_personas_input, blablador_api_key_input],
         outputs=output_json,
         api_name="generate_personas"
+    )
+
+    find_button.click(
+        fn=find_best_persona,
+        inputs=[criteria_input],
+        outputs=output_json,
+        api_name="find_best_persona"
     )
 
 if __name__ == "__main__":

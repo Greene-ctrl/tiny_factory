@@ -265,3 +265,24 @@ def compute_semantic_proximity(text1: str, text2: str, context: str = None) -> f
     """
     # llm decorator will handle the body of this function
 
+@llm()
+def select_best_persona(criteria: str, personas: list) -> int:
+    """
+    Given a set of criteria and a list of personas (each a dictionary),
+    select the index of the persona that best matches the criteria.
+    If no persona matches at all, return -1.
+
+    Rules:
+    - You must analyze each persona against the criteria.
+    - Return ONLY the integer index (starting from 0) of the best matching persona.
+    - Do not provide any explanation, just the number.
+    - If there are multiple good matches, pick the best one.
+
+    Args:
+        criteria (str): The search criteria or description of the desired persona.
+        personas (list): A list of dictionaries, where each dictionary is a persona specification.
+
+    Returns:
+        int: The index of the best matching persona, or -1 if none match.
+    """
+    # llm decorator will handle the body of this function
