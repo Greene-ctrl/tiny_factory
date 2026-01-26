@@ -159,14 +159,32 @@ class OpenAIClient:
             chat_api_params["response_format"] = response_format
 
         i = 0
-        while i < max_attempts:
+        while True:
             try:
                 i += 1
 
+                #
+                # Model fallback and retry strategy requested by the user:
+                # 1. alias-fast for 3 attempts, 35s wait
+                # 2. alias-large for 2 attempts, 35s wait
+                # 3. alias-huge until success, 60s wait
+                #
+                if i <= 3:
+                    current_model = "alias-fast"
+                    current_wait_time = 35
+                elif i <= 5:
+                    current_model = "alias-large"
+                    current_wait_time = 35
+                else:
+                    current_model = "alias-huge"
+                    current_wait_time = 60
+
+                chat_api_params["model"] = current_model
+
                 try:
-                    logger.debug(f"Sending messages to OpenAI API. Token count={self._count_tokens(current_messages, model)}.")
+                    logger.debug(f"Sending messages to OpenAI API. Model={current_model}. Token count={self._count_tokens(current_messages, current_model)}.")
                 except NotImplementedError:
-                    logger.debug(f"Token count not implemented for model {model}.")
+                    logger.debug(f"Token count not implemented for model {current_model}.")
                     
                 start_time = time.monotonic()
                 logger.debug(f"Calling model with client class {self.__class__.__name__}.")
@@ -174,14 +192,11 @@ class OpenAIClient:
                 ###############################################################
                 # call the model, either from the cache or from the API
                 ###############################################################
-                cache_key = str((model, chat_api_params)) # need string to be hashable
+                cache_key = str((current_model, chat_api_params)) # need string to be hashable
                 if self.cache_api_calls and (cache_key in self.api_cache):
                     response = self.api_cache[cache_key]
                 else:
-                    # We no longer sleep here, as the exponential backoff already handles
-                    # the waiting time between retries. Sleeping here would cause
-                    # double sleeping.
-                    response = self._raw_model_call(model, chat_api_params)
+                    response = self._raw_model_call(current_model, chat_api_params)
                     if self.cache_api_calls:
                         self.api_cache[cache_key] = response
                         self._save_cache()
@@ -199,31 +214,27 @@ class OpenAIClient:
 
             except (InvalidRequestError, openai.BadRequestError) as e:
                 logger.error(f"[{i}] Invalid request error, won't retry: {e}")
-
-                # there's no point in retrying if the request is invalid
-                # so we return None right away
                 return None
             
             except (openai.RateLimitError,
                     openai.APITimeoutError,
                     openai.APIConnectionError,
                     openai.InternalServerError,
-                    NonTerminalError) as e:
-                logger.warning(f"[{i}] {type(e).__name__} Error: {e}")
-                if i < max_attempts:
-                    aux_exponential_backoff()
-                else:
-                    logger.error(f"Max attempts reached for {type(e).__name__} Error: {e}")
-            
-            except Exception as e:
-                logger.error(f"[{i}] {type(e).__name__} Error: {e}")
-                if i < max_attempts:
-                    aux_exponential_backoff()
-                else:
-                    logger.error(f"Max attempts reached for {type(e).__name__} Error: {e}")
+                    NonTerminalError,
+                    Exception) as e:
+                msg = f"[{i}] {type(e).__name__} Error with {current_model}: {e}. Waiting {current_wait_time} seconds before next attempt..."
+                logger.warning(msg)
 
-        logger.error(f"Failed to get response after {max_attempts} attempts.")
-        return None
+                # inform the Gradio UI/API if possible
+                try:
+                    import gradio as gr
+                    gr.Warning(msg)
+                except Exception:
+                    # not running in Gradio or other issue
+                    pass
+
+                time.sleep(current_wait_time)
+                continue
     
     def _raw_model_call(self, model, chat_api_params):
         """
@@ -246,8 +257,12 @@ class OpenAIClient:
             chat_api_params["reasoning_effort"] = default["reasoning_effort"]
 
 
-        # To make the log cleaner, we remove the messages from the logged parameters
-        logged_params = {k: v for k, v in chat_api_params.items() if k != "messages"} 
+        # To make the log cleaner, we remove the messages from the logged parameters,
+        # unless we are in debug mode
+        if logger.getEffectiveLevel() <= logging.DEBUG:
+            logged_params = chat_api_params
+        else:
+            logged_params = {k: v for k, v in chat_api_params.items() if k != "messages"}
 
         if "response_format" in chat_api_params:
             # to enforce the response format via pydantic, we need to use a different method
