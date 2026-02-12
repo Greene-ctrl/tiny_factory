@@ -1,5 +1,6 @@
 from tinytroupe.agent import logger, default, Self, AgentOrWorld, CognitiveActionModel
 from tinytroupe.agent.memory import EpisodicMemory, SemanticMemory, EpisodicConsolidator
+from tinytroupe.agent.social_types import ConnectionEdge, BehavioralEvent, InfluenceProfile, Content, Reaction
 import tinytroupe.openai_utils as openai_utils
 from tinytroupe.utils import JsonSerializableRegistry, repeat_on_error, name_or_empty
 import tinytroupe.utils as utils
@@ -42,7 +43,8 @@ class TinyPerson(JsonSerializableRegistry):
 
     PP_TEXT_WIDTH = 100
 
-    serializable_attributes = ["_persona", "_mental_state", "_mental_faculties", "_current_episode_event_count", "episodic_memory", "semantic_memory"]
+    serializable_attributes = ["_persona", "_mental_state", "_mental_faculties", "_current_episode_event_count", "episodic_memory", "semantic_memory",
+                               "social_connections", "engagement_patterns", "behavioral_history", "influence_metrics", "prediction_confidence", "behavioral_traits"]
     serializable_attributes_renaming = {"_mental_faculties": "mental_faculties", "_persona": "persona", "_mental_state": "mental_state", "_current_episode_event_count": "current_episode_event_count"}
 
     # A dict of all agents instantiated so far.
@@ -209,6 +211,29 @@ class TinyPerson(JsonSerializableRegistry):
         
         if not hasattr(self, 'stimuli_count'):
             self.stimuli_count = 0
+
+        if not hasattr(self, 'social_connections'):
+            self.social_connections = {}
+
+        if not hasattr(self, 'engagement_patterns'):
+            self.engagement_patterns = {
+                "content_type_preferences": {},
+                "topic_affinities": {},
+                "posting_time_preferences": {},
+                "engagement_likelihood": {}
+            }
+
+        if not hasattr(self, 'behavioral_history'):
+            self.behavioral_history = []
+
+        if not hasattr(self, 'influence_metrics'):
+            self.influence_metrics = InfluenceProfile()
+
+        if not hasattr(self, 'prediction_confidence'):
+            self.prediction_confidence = 0.0
+
+        if not hasattr(self, 'behavioral_traits'):
+            self.behavioral_traits = {}
 
         self._prompt_template_path = os.path.join(
             os.path.dirname(__file__), "prompts/tiny_person.mustache"
@@ -1794,3 +1819,72 @@ max_content_length=max_content_length,
         Clears the global list of agents.
         """
         TinyPerson.all_agents = {}
+
+    ############################################################################
+    # Social and Engagement methods
+    ############################################################################
+
+    def calculate_engagement_probability(self, content: Content) -> float:
+        """
+        Analyze content features and return probability of engagement.
+        """
+        # Analyze content features (topic, format, length, tone)
+        # Apply persona's engagement patterns
+        # Factor in social influence from connections
+
+        # This is a placeholder for the actual implementation which would likely involve LLM or ML models
+        # For now, we use a simple heuristic
+
+        topic_score = 0.0
+        for topic in content.topics:
+            topic_score = max(topic_score, self.engagement_patterns["topic_affinities"].get(topic, 0.0))
+
+        format_score = self.engagement_patterns["content_type_preferences"].get(content.format, 0.5)
+
+        base_prob = (topic_score + format_score) / 2.0
+
+        # Factor in social influence (simulated)
+        social_influence = 0.0
+        if hasattr(self, 'environment') and self.environment:
+            # Check if connections in the same environment have engaged
+            pass
+
+        return base_prob
+
+    def predict_reaction(self, content: Content) -> Reaction:
+        """
+        Determine reaction type and generate comment if applicable.
+        """
+        prob = self.calculate_engagement_probability(content)
+        will_engage = prob > 0.5
+
+        reaction_type = "none"
+        if will_engage:
+            reaction_type = "like" # Default
+
+        return Reaction(
+            reaction_type=reaction_type,
+            will_engage=will_engage,
+            probability=prob,
+            reasoning="Simulated reaction based on affinities.",
+            will_share=prob > 0.8
+        )
+
+    def update_from_interaction(self, interaction: Any) -> None:
+        """
+        Learn from actual interactions and update patterns.
+        """
+        # interaction could be a dict with content and outcome
+        if isinstance(interaction, dict):
+            content = interaction.get("content")
+            outcome = interaction.get("outcome") # e.g. "like", "comment", "none"
+
+            # Update patterns based on outcome
+            # This is a simplified learning mechanism
+            pass
+
+    def get_content_affinity(self, content: Content) -> float:
+        """
+        Score content relevance to persona.
+        """
+        return self.calculate_engagement_probability(content)

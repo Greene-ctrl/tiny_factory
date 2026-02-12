@@ -342,6 +342,44 @@ class TinyPersonFactory(TinyFactory):
    
     
     @config_manager.config_defaults(parallelize="parallel_agent_generation")
+    def generate_from_linkedin_profile(self, profile_data: Dict) -> TinyPerson:
+        """
+        Generate a TinyPerson from a LinkedIn profile.
+        """
+        description = f"Professional with headline: {profile_data.get('headline', '')}. " \
+                      f"Industry: {profile_data.get('industry', '')}. " \
+                      f"Summary: {profile_data.get('summary', '')}"
+
+        return self.generate_person(agent_particularities=description)
+
+    def generate_persona_cluster(self, archetype: str, count: int) -> List[TinyPerson]:
+        """
+        Generate a cluster of personas following a specific archetype.
+        """
+        return self.generate_people(number_of_people=count, agent_particularities=f"Archetype: {archetype}")
+
+    def generate_diverse_population(self, size: int, distribution: Dict) -> List[TinyPerson]:
+        """
+        Generate a diverse population based on a distribution.
+        """
+        # distribution could specify proportions of various characteristics
+        # This is a simplified implementation
+        return self.generate_people(number_of_people=size, agent_particularities=f"Target distribution: {json.dumps(distribution)}")
+
+    def ensure_consistency(self, persona: TinyPerson) -> bool:
+        """
+        Ensure the generated persona is consistent.
+        """
+        # Implementation would involve checking traits, demographics, etc.
+        return True # Placeholder
+
+    def calculate_diversity_score(self, personas: List[TinyPerson]) -> float:
+        """
+        Calculate a diversity score for a list of personas.
+        """
+        # Placeholder for diversity metric calculation
+        return 0.5
+
     def generate_people(self, number_of_people:int=None, 
                         agent_particularities:str=None, 
                         temperature:float=1.2, 

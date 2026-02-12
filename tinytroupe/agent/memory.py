@@ -88,6 +88,24 @@ class TinyMemory(TinyMentalFaculty):
         """
         raise NotImplementedError("Subclasses must implement this method.")
 
+    def store_interaction(self, interaction: Any) -> None:
+        """
+        Stores an interaction in memory.
+        """
+        self.store({"type": "interaction", "content": interaction, "simulation_timestamp": utils.pretty_datetime(datetime.now())})
+
+    def get_memory_summary(self) -> str:
+        """
+        Returns a summary of the memory.
+        """
+        raise NotImplementedError("Subclasses must implement this method.")
+
+    def consolidate_memories(self) -> None:
+        """
+        Consolidates memories (e.g., from episodic to semantic).
+        """
+        raise NotImplementedError("Subclasses must implement this method.")
+
     def summarize_relevant_via_full_scan(self, relevance_target: str, batch_size: int = 20, item_type: str = None) -> str:
         """
         Performs a full scan of the memory, extracting and accumulating information relevant to a query.
