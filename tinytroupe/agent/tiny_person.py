@@ -6,6 +6,7 @@ import tinytroupe.utils as utils
 from tinytroupe.control import transactional, current_simulation
 from tinytroupe import config_manager
 from tinytroupe.utils.logger import get_logger
+from tinytroupe.agent_types import ConnectionEdge, BehavioralEvent, InfluenceProfile, Content, Reaction, Interaction
 
 import os
 import json
@@ -42,7 +43,8 @@ class TinyPerson(JsonSerializableRegistry):
 
     PP_TEXT_WIDTH = 100
 
-    serializable_attributes = ["_persona", "_mental_state", "_mental_faculties", "_current_episode_event_count", "episodic_memory", "semantic_memory"]
+    serializable_attributes = ["_persona", "_mental_state", "_mental_faculties", "_current_episode_event_count", "episodic_memory", "semantic_memory",
+                               "social_connections", "engagement_patterns", "behavioral_history", "influence_metrics", "prediction_confidence"]
     serializable_attributes_renaming = {"_mental_faculties": "mental_faculties", "_persona": "persona", "_mental_state": "mental_state", "_current_episode_event_count": "current_episode_event_count"}
 
     # A dict of all agents instantiated so far.
@@ -209,6 +211,33 @@ class TinyPerson(JsonSerializableRegistry):
         
         if not hasattr(self, 'stimuli_count'):
             self.stimuli_count = 0
+
+        # Social Network and Engagement Enhancements
+        if not hasattr(self, 'social_connections'):
+            self.social_connections = {}  # connection_id -> ConnectionEdge
+
+        if not hasattr(self, 'engagement_patterns'):
+            self.engagement_patterns = {
+                "content_type_preferences": {},
+                "topic_affinities": {},
+                "posting_time_preferences": {},
+                "engagement_likelihood": 0.1
+            }
+
+        if not hasattr(self, 'behavioral_history'):
+            self.behavioral_history = []
+
+        if not hasattr(self, 'influence_metrics'):
+            self.influence_metrics = InfluenceProfile(
+                reach=0.0,
+                authority=0.0,
+                expertise_domains=[],
+                follower_to_following_ratio=1.0,
+                engagement_rate=0.0
+            )
+
+        if not hasattr(self, 'prediction_confidence'):
+            self.prediction_confidence = 0.5
 
         self._prompt_template_path = os.path.join(
             os.path.dirname(__file__), "prompts/tiny_person.mustache"
@@ -1794,3 +1823,86 @@ max_content_length=max_content_length,
         Clears the global list of agents.
         """
         TinyPerson.all_agents = {}
+
+    #########################################################################
+    # Artificial Societies Enhancements
+    #########################################################################
+
+    def calculate_engagement_probability(self, content: Content) -> float:
+        """
+        Calculates the probability that the persona will engage with the given content.
+        """
+        affinity = self.get_content_affinity(content)
+
+        # Base probability from engagement patterns
+        base_prob = self.engagement_patterns.get("engagement_likelihood", 0.1)
+
+        # Factor in social influence (placeholder logic)
+        social_factor = 1.0
+        for conn_id, edge in self.social_connections.items():
+            if edge.influence_score > 0.8:
+                social_factor += 0.1
+
+        prob = affinity * base_prob * social_factor
+        return min(max(prob, 0.0), 1.0)
+
+    def predict_reaction(self, content: Content) -> Reaction:
+        """
+        Predicts the reaction of the persona to the given content.
+        """
+        prob = self.calculate_engagement_probability(content)
+
+        if random.random() > prob:
+            return Reaction(reaction_type="none")
+
+        # Use LLM to generate reaction and comment
+        prompt = f"Given the content: '{content.text}', how would {self.name} react? Persona info: {self.minibio()}"
+        # Placeholder for LLM call
+        reaction_type = random.choice(["like", "love", "insightful", "celebrate"])
+        comment = f"Interesting post about {', '.join(content.topics)}!"
+
+        return Reaction(
+            reaction_type=reaction_type,
+            comment=comment,
+            will_share=random.random() < 0.2,
+            virality_coefficient=self.influence_metrics.authority * 0.5
+        )
+
+    def update_from_interaction(self, interaction: Interaction) -> None:
+        """
+        Updates the persona's patterns based on a real interaction.
+        """
+        event = BehavioralEvent(
+            timestamp=interaction.timestamp,
+            action_type=interaction.action_type,
+            content_id=interaction.content_id,
+            outcome=interaction.outcome
+        )
+        self.behavioral_history.append(event)
+
+        # Simple reinforcement learning logic
+        if interaction.action_type in ["like", "comment", "share"]:
+            # Increase engagement likelihood slightly
+            self.engagement_patterns["engagement_likelihood"] *= 1.05
+
+        # Keep history manageable
+        if len(self.behavioral_history) > 100:
+            self.behavioral_history.pop(0)
+
+    def get_content_affinity(self, content: Content) -> float:
+        """
+        Scores the content relevance to the persona.
+        """
+        score = 0.5 # Neutral base
+
+        # Topic alignment
+        persona_topics = self.get("interests") or []
+        matched_topics = set(persona_topics).intersection(set(content.topics))
+        if matched_topics:
+            score += 0.1 * len(matched_topics)
+
+        # Content type preference
+        pref = self.engagement_patterns["content_type_preferences"].get(content.content_type, 1.0)
+        score *= pref
+
+        return min(max(score, 0.0), 2.0) # Normalized to a reasonable range

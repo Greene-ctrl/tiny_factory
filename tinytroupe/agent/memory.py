@@ -88,6 +88,12 @@ class TinyMemory(TinyMentalFaculty):
         """
         raise NotImplementedError("Subclasses must implement this method.")
 
+    def get_memory_summary(self) -> str:
+        """
+        Returns a summary of all memories.
+        """
+        return self.summarize_relevant_via_full_scan("A general summary of the agent's experiences and knowledge.")
+
     def summarize_relevant_via_full_scan(self, relevance_target: str, batch_size: int = 20, item_type: str = None) -> str:
         """
         Performs a full scan of the memory, extracting and accumulating information relevant to a query.
