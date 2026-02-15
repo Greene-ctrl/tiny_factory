@@ -12,6 +12,7 @@ from tinytroupe.agent import TinyPerson
 import tinytroupe.utils as utils
 from tinytroupe.control import transactional
 from tinytroupe import config_manager
+from tinytroupe.agent_traits import TraitBasedBehaviorModel
 
 import concurrent.futures
 import threading
@@ -625,6 +626,61 @@ class TinyPersonFactory(TinyFactory):
         """
         return name in TinyPerson.all_agents_names()
 
+    #########################################################################
+    # Artificial Societies Factory Enhancements
+    #########################################################################
+
+    def generate_from_demographics(self, age_range: tuple, location: str, occupation: str, interests: List[str]) -> TinyPerson:
+        """
+        Generates a persona based on specific demographics.
+        """
+        context = f"A {age_range[0]}-{age_range[1]} year old {occupation} in {location} interested in {', '.join(interests)}."
+        return self.generate_person(agent_particularities=context)
+
+    def generate_from_linkedin_profile(self, profile_data: Dict) -> TinyPerson:
+        """
+        Generates a persona based on a LinkedIn profile.
+        """
+        context = f"Professional profile: {json.dumps(profile_data)}"
+        persona = self.generate_person(agent_particularities=context)
+        persona.define("social_platform", "LinkedIn")
+        return persona
+
+    def generate_persona_cluster(self, archetype: str, count: int) -> List[TinyPerson]:
+        """
+        Generates a cluster of personas based on an archetype.
+        """
+        personas = []
+        for _ in range(count):
+            particularities = f"Archetype: {archetype}. Ensure individual variation."
+            personas.append(self.generate_person(agent_particularities=particularities))
+        return personas
+
+    def generate_diverse_population(self, size: int, distribution: Dict) -> List[TinyPerson]:
+        """
+        Generates a diverse population based on a distribution.
+        """
+        # Simplistic implementation: use create_factory_from_demography logic
+        return self.generate_people(number_of_people=size, verbose=True)
+
+    def ensure_consistency(self, persona: TinyPerson) -> bool:
+        """
+        Validates the consistency of a generated persona.
+        """
+        # Placeholder for LLM-based consistency check
+        traits = persona.get("behavioral_traits")
+        if traits and len(traits) > 0:
+            return True
+        return False
+
+    def calculate_diversity_score(self, personas: List[TinyPerson]) -> float:
+        """
+        Measures demographic and behavioral diversity of a population.
+        """
+        if not personas: return 0.0
+        # Placeholder logic: ratio of unique occupations
+        occupations = [p.get("occupation") for p in personas]
+        return len(set(occupations)) / len(personas)
 
     @transactional()
     @utils.llm(temperature=0.5, frequency_penalty=0.0, presence_penalty=0.0)
