@@ -1,9 +1,7 @@
 from fastapi import FastAPI
-from tinytroupe.simulation_manager import SimulationManager
+from api.dependencies import simulation_manager
 
 app = FastAPI(title="Tiny Factory & Artificial Societies API")
-
-simulation_manager = SimulationManager()
 
 @app.get("/health")
 def health():

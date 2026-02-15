@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from typing import List, Optional, Dict
 from pydantic import BaseModel
 from datetime import datetime
-from api.main import simulation_manager
+from api.dependencies import simulation_manager
 from tinytroupe.simulation_manager import SimulationConfig
 
 router = APIRouter()

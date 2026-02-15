@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict
 from pydantic import BaseModel
-from api.main import simulation_manager
+from api.dependencies import simulation_manager
 
 router = APIRouter()
 
